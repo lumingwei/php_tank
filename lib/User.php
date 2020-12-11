@@ -49,7 +49,6 @@ class User extends Actor
      */
     public $killNumTemp = 0;
 
-
     /**
      * 加入游戏的时间帧，前5秒是无敌状态，不会被击打
      * @var int
@@ -57,17 +56,12 @@ class User extends Actor
     public $enterTimerIndex = 0;
 
     /**
-     * 最后开火时间
-     * @var int
+     * 用户操作cd(冷却)配置
+     * @var int[][]
      */
-    public $lastFireTime = 0;
-
-    /**
-     * 最后移动时间
-     * @var int
-     */
-    public $lastMoveTime = 0;
-
+    public $cdConfig = [
+        //'move' => [0, 2], //移动时间
+    ];
 
     /**
      * User constructor.
@@ -102,11 +96,7 @@ class User extends Actor
     public function move($dir)
     {
         //防止客户端捣乱
-        if (Timer::$index - $this->lastMoveTime < 2) {
-            return;
-        }
-
-        $this->lastMoveTime = Timer::$index;
+        $this->checkCd(__FUNCTION__, 2);
 
         $this->moveDis($dir);
 
@@ -121,21 +111,44 @@ class User extends Actor
 
     /**
      * 玩家开火
+     * @param int $dir 子弹朝向
      */
-    public function fire()
+    public function fire($dir = 0)
     {
         //防止客户端捣乱
-        if (Timer::$index - $this->lastFireTime < 10) {
-            return;
+        $this->checkCd(__FUNCTION__, 10);
+
+        //使用角色当前的朝向
+        if ($dir < 1) {
+            $dir = $this->dir;
         }
 
-        $this->lastFireTime = Timer::$index;
-
-        $bullet = Bullet::initByUser($this);
+        $bullet = Bullet::initByUser($this, $dir);
         $bullet->room->actorList[$bullet->id] = $bullet;
 
         $bulletData = $bullet->getInitData();
         Host::pushToAllUser('BulletInit', $bulletData);
+        Logger::debug(__METHOD__, $bulletData);
+    }
+
+    /**
+     * 放置炸弹
+     */
+    public function bomb()
+    {
+        $this->checkCd(__FUNCTION__, 30);
+
+
+        $bullet = Bullet::initByUser($this, $this->dir);
+        $bullet->setKillRadius(45);
+        $bullet->lifeTime = 100;
+        $bullet->speed = 0;
+        $bullet->type = Bullet::TYPE_BOMB;
+        $bullet->room->actorList[$bullet->id] = $bullet;
+
+        $bulletData = $bullet->getInitData();
+        Host::pushToAllUser('BulletInit', $bulletData);
+        Logger::debug(__METHOD__, $bulletData);
     }
 
     /**
@@ -143,8 +156,8 @@ class User extends Actor
      */
     public function beforeEnter()
     {
-        $this->x = mt_rand(0, Room::MAP_WEIGHT);
-        $this->y = mt_rand(0, Room::MAP_HEIGHT);
+        $this->x = mt_rand(25, Room::MAP_WEIGHT - 25);
+        $this->y = mt_rand(25, Room::MAP_HEIGHT - 25);
         $this->enterTimerIndex = Timer::$index;
         $this->killNumTemp = 0; //单局击杀数量重置为0
 
@@ -256,6 +269,7 @@ class User extends Actor
      */
     public function sendChatMsg($content)
     {
+        //$this->checkCd(__FUNCTION__, 30);
         $pushData = [
             'name' => '系统',
             'content' =>  date('[H:i:s]') . str_replace('{name}', '【' . $this->name . '】', $content),
@@ -273,5 +287,28 @@ class User extends Actor
         if ($this->killNumTemp > $this->killNumOne) {
             $this->killNumOne = $this->killNumTemp;
         }
+    }
+
+
+    /**
+     * 判断当前操作是否在cd中
+     * @param $method
+     * @param $defaultValue
+     * @param string $param
+     */
+    protected function checkCd($method, $defaultValue, $param = '')
+    {
+        $method .= $param;
+        if (!isset($this->cdConfig[$method])) {
+            $this->cdConfig[$method] = [0, $defaultValue];
+        }
+
+        list($lastDoTime, $cd) = $this->cdConfig[$method];
+        if (Timer::$index - $lastDoTime < $cd) {
+            E::out("{$method} in cd", -1);
+        }
+
+        //标记最后操作时间
+        $this->cdConfig[$method][0] = Timer::$index;
     }
 }

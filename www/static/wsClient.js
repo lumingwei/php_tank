@@ -61,9 +61,6 @@ function getMsTime()
 $(function(){
     wsConnect();
     let keyMap = {
-        87 : 0, //w
-        119 : 0, //w
-
         68 : 1, //d
         100 : 1, //D
 
@@ -72,11 +69,15 @@ $(function(){
 
         65 : 3, //a
         97 : 3, //A
+
+        87 : 4, //w
+        119 : 4, //w
     }
 
     let keyDownMap = {}
     onkeydown = onkeyup = function (event) {
         let keyCode = event.which;
+        console.log("keyCode", keyCode);
         if (event.type == 'keydown') {
             keyDownMap[keyCode] = true;
 
@@ -86,6 +87,14 @@ $(function(){
                 if (nowTime - lastFireMs >= 1000) { //一秒才允许发一个子弹
                     lastFireMs = nowTime;
                     doUserFire();
+                }
+            }
+            //直接发射炮弹
+            if (myUserId > 0  && (keyCode==75 || keyCode == 107)) {
+                let nowTime = getMsTime();
+                if (nowTime - lastBombMs >= 3000) { //一秒才允许发一个子弹
+                    lastBombMs = nowTime;
+                    doUserBomb();
                 }
             }
         } else {

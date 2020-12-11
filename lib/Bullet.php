@@ -7,15 +7,19 @@
  */
 
 /**
- * 子弹类型
+ * npc子弹
  */
 class Bullet extends Npc
 {
     /**
-     * 默认碰撞半径
-     * 系统做了简化处理，把子弹单做一个点，把坦克当初一个圆（虽然坦克是方形的）
+     * 子弹类型：普通子弹
      */
-    const COLLISION_RADIUS_SQUARE = 30 * 30;
+    const TYPE_BULLET = 1;
+
+    /**
+     * 子弹类型：炸弹
+     */
+    const TYPE_BOMB = 2;
 
     /**
      * @var User
@@ -29,32 +33,72 @@ class Bullet extends Npc
      */
     public $hp = 1;
 
+    /**
+     * @var int
+     */
     public $speed = 20;
+
+    /**
+     * @var int
+     */
+    public $type = 1;
+
+    /**
+     * 开始时间戳
+     * @var int
+     */
+    public $startTimerIndex = 0;
+
+    /**
+     * 生命周期，子弹能存在多久
+     * @var int
+     */
+    public $lifeTime = 0;
+
+    /**
+     * @var int
+     * 默认碰撞半径的平方（直接比较两个半径的平方值，避免开方浪费计算资源）
+     * 系统做了简化处理，把子弹单做一个点，把坦克当初一个圆（虽然坦克是方形的）
+     */
+    public $killRadiusSquare = 900;
 
     /**
      * 初始化一个对象
      * @param User $user
+     * @param int $dir 子弹朝向
      * @return static
      */
-    public static function initByUser($user)
+    public static function initByUser($user, $dir)
     {
         $npcId = self::getAutoId();
-        return new self($npcId, $user);
+        return new self($npcId, $user, $dir);
     }
 
     /**
      * Bullet constructor.
      * @param int $npcId
      * @param User $user
+     * @param int $dir
      */
-    public function __construct($npcId, $user)
+    public function __construct($npcId, $user, $dir)
     {
+        $this->startTimerIndex = Timer::$index;
         $this->id = $npcId;
         $this->owner = $user;
         $this->room = $user->room;
-        $this->dir = $user->dir;
+        $this->dir = $dir;
         $this->x = $user->x;
         $this->y = $user->y;
+        $this->setKillRadius(30);
+    }
+
+    /**
+     * @param int $radius
+     * 系统做了简化处理，把子弹单做一个点，把坦克当初一个圆（虽然坦克是方形的）
+     */
+    public function setKillRadius($radius = 30)
+    {
+        $this->killRadiusSquare = $radius * $radius;
     }
 
     /**
@@ -62,8 +106,15 @@ class Bullet extends Npc
      */
     public function onEvent()
     {
-        //子弹飞行
-        $this->onMove();
+        //如果子弹的速度大于0，则飞行
+        if ($this->speed > 0) {
+            $this->onMove();
+        }
+
+        //子弹超过生命生命周期
+        if ($this->lifeTime > 0 && (Timer::$index - $this->startTimerIndex > $this->lifeTime)) {
+            $this->isDeath = true; //变成死亡状态
+        }
 
         //如果死亡了
         if ($this->isDeath) {
@@ -108,7 +159,7 @@ class Bullet extends Npc
             //按照圆计算碰撞
             $dx = $user->x - $this->x;
             $dy = $user->y - $this->y;
-            if (($dx * $dx + $dy * $dy) < self::COLLISION_RADIUS_SQUARE) {
+            if (($dx * $dx + $dy * $dy) < $this->killRadiusSquare) {
                 $user->onCollision($this);
                 $this->hpDecr(1); //子弹血量减少1
                 break;
@@ -129,6 +180,11 @@ class Bullet extends Npc
         Util::between($toX, 0, Room::MAP_WEIGHT);
         Util::between($toY, 0, Room::MAP_HEIGHT);
 
+        //飞行目的地
+        if ($this->speed < 1) {
+            $toX = $this->x;
+            $toY = $this->y;
+        }
 
         //计算目的距离
         $dis = sqrt(pow($this->x - $toX, 2) + pow($this->y - $toY, 2));
@@ -136,12 +192,13 @@ class Bullet extends Npc
         //返回时间
         return [
             'id' => $this->id,
+            'type' => $this->type,
             'dir' => $this->dir,
             'x' => $this->x,
             'y' => $this->y,
             'toX' => $toX,
             'toY' => $toY,
-            'toTime' => ($dis / $this->speed) * 100,
+            'toTime' => ($this->speed > 0) ? ($dis / $this->speed) * 100 : 0,
             'speed' => $this->speed,
         ];
     }

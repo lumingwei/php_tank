@@ -16,10 +16,10 @@ class Actor extends Obj
      * @var int[][]
      */
     public static $dirVectorList = [
-        0 => [0, -1], //上
         1 => [1, 0], //右
         2 => [0, 1], //下
         3 => [-1, 0], //左
+        4 => [0, -1], //上，客户端正好旋转360度
     ];
 
     /**
@@ -57,7 +57,7 @@ class Actor extends Obj
     public $radius = 0;
 
     /**
-     * 角度朝向,0上，1下，2左，3右
+     * 角度朝向,1右，2下，3左，4右
      * @var int
      */
     public $dir = 1;
@@ -157,6 +157,8 @@ class Actor extends Obj
         //防止出界
         Util::between($this->x, 0, Room::MAP_WEIGHT);
         Util::between($this->y, 0, Room::MAP_HEIGHT);
+
+        //Logger::debug(__METHOD__, $this->id, $this->dir, $this->x, $this->y);
     }
 
     /**
